@@ -24,13 +24,14 @@ export async function PATCH(
 ) {
   const { id } = await params
   const body = await request.json()
-  const { title, description, priority, completed, responsible } = body
+  const { title, description, priority, completed, responsible, deadline } = body
 
   const updateData: Record<string, unknown> = {}
   if (title !== undefined) updateData.title = title
   if (description !== undefined) updateData.description = description
   if (priority !== undefined) updateData.priority = priority
   if (responsible !== undefined) updateData.responsible = responsible
+  if (deadline !== undefined) updateData.deadline = deadline ? new Date(deadline) : null
   if (completed !== undefined) {
     updateData.completed = completed
     updateData.solvedAt = completed ? new Date() : null

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Priority } from '@/lib/types'
 
 interface AddTodoFormProps {
-  onAdd: (data: { title: string; description: string; priority: Priority; responsible: string }) => void
+  onAdd: (data: { title: string; description: string; priority: Priority; responsible: string; deadline: string }) => void
 }
 
 export default function AddTodoForm({ onAdd }: AddTodoFormProps) {
@@ -14,13 +14,14 @@ export default function AddTodoForm({ onAdd }: AddTodoFormProps) {
     description: '',
     priority: 'low' as Priority,
     responsible: '',
+    deadline: '',
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (formData.title.trim()) {
       onAdd(formData)
-      setFormData({ title: '', description: '', priority: 'low', responsible: '' })
+      setFormData({ title: '', description: '', priority: 'low', responsible: '', deadline: '' })
       setIsOpen(false)
     }
   }
@@ -55,8 +56,8 @@ export default function AddTodoForm({ onAdd }: AddTodoFormProps) {
           placeholder="Description (optional)"
           rows={2}
         />
-        <div className="flex gap-3">
-          <div className="flex-1">
+        <div className="flex gap-3 flex-wrap">
+          <div className="flex-1 min-w-32">
             <label className="block text-sm text-gray-600 mb-1">Priority</label>
             <select
               value={formData.priority}
@@ -68,7 +69,7 @@ export default function AddTodoForm({ onAdd }: AddTodoFormProps) {
               <option value="high">🔴 High</option>
             </select>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-32">
             <label className="block text-sm text-gray-600 mb-1">Responsible</label>
             <input
               type="text"
@@ -76,6 +77,15 @@ export default function AddTodoForm({ onAdd }: AddTodoFormProps) {
               onChange={(e) => setFormData({ ...formData, responsible: e.target.value })}
               className="w-full p-2 border rounded text-black"
               placeholder="Who's responsible?"
+            />
+          </div>
+          <div className="flex-1 min-w-32">
+            <label className="block text-sm text-gray-600 mb-1">Deadline</label>
+            <input
+              type="date"
+              value={formData.deadline}
+              onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+              className="w-full p-2 border rounded text-black"
             />
           </div>
         </div>

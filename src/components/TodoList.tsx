@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -26,6 +26,8 @@ export default function TodoList() {
   const [groups, setGroups] = useState<Group[]>([])
   const [activeGroupId, setActiveGroupId] = useState('common')
   const [showCompleted, setShowCompleted] = useState(false)
+  const [selectedPriorities, setSelectedPriorities] = useState<Priority[]>(['high', 'medium', 'low'])
+  const [selectedAssignee, setSelectedAssignee] = useState<string>('')
   const [loading, setLoading] = useState(true)
 
   const sensors = useSensors(
@@ -35,6 +37,15 @@ export default function TodoList() {
     })
   )
 
+  // Get unique assignees from all todos
+  const allAssignees = useMemo(() => {
+    const assignees = new Set<string>()
+    todos.forEach((t) => {
+      if (t.responsible) assignees.add(t.responsible)
+    })
+    return Array.from(assignees).sort()
+  }, [todos])
+
   const fetchGroups = useCallback(async () => {
     const res = await fetch('/api/groups')
     const data = await res.json()
@@ -42,11 +53,22 @@ export default function TodoList() {
   }, [])
 
   const fetchTodos = useCallback(async () => {
-    const res = await fetch(`/api/todos?showCompleted=${showCompleted}&groupId=${activeGroupId}`)
+    const params = new URLSearchParams({
+      showCompleted: String(showCompleted),
+      groupId: activeGroupId,
+    })
+    if (selectedPriorities.length < 3) {
+      params.set('priorities', selectedPriorities.join(','))
+    }
+    if (selectedAssignee) {
+      params.set('assignee', selectedAssignee)
+    }
+    
+    const res = await fetch(`/api/todos?${params}`)
     const data = await res.json()
     setTodos(data)
     setLoading(false)
-  }, [showCompleted, activeGroupId])
+  }, [showCompleted, activeGroupId, selectedPriorities, selectedAssignee])
 
   useEffect(() => {
     fetchGroups()
@@ -73,7 +95,7 @@ export default function TodoList() {
     }
   }
 
-  const handleAddTodo = async (data: { title: string; description: string; priority: Priority; responsible: string }) => {
+  const handleAddTodo = async (data: { title: string; description: string; priority: Priority; responsible: string; deadline: string }) => {
     const res = await fetch('/api/todos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -117,6 +139,30 @@ export default function TodoList() {
     )
   }
 
+  const handleEditComment = async (commentId: string, content: string) => {
+    const res = await fetch(`/api/comments/${commentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    })
+    const updatedComment = await res.json()
+    setTodos(
+      todos.map((t) => ({
+        ...t,
+        comments: t.comments.map((c) => (c.id === commentId ? updatedComment : c)),
+      }))
+    )
+  }
+
+  const handleDeleteComment = async (commentId: string, todoId: string) => {
+    await fetch(`/api/comments/${commentId}`, { method: 'DELETE' })
+    setTodos(
+      todos.map((t) =>
+        t.id === todoId ? { ...t, comments: t.comments.filter((c) => c.id !== commentId) } : t
+      )
+    )
+  }
+
   const handleCreateGroup = async (name: string) => {
     const res = await fetch('/api/groups', {
       method: 'POST',
@@ -138,10 +184,30 @@ export default function TodoList() {
     setGroups(groups.map((g) => (g.id === id ? updatedGroup : g)))
   }
 
+  const handleChangeGroupColor = async (id: string, color: string) => {
+    const res = await fetch(`/api/groups/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color }),
+    })
+    const updatedGroup = await res.json()
+    setGroups(groups.map((g) => (g.id === id ? updatedGroup : g)))
+  }
+
   const handleDeleteGroup = async (id: string) => {
     await fetch(`/api/groups/${id}`, { method: 'DELETE' })
     setGroups(groups.filter((g) => g.id !== id))
     setActiveGroupId('common')
+  }
+
+  const handlePriorityToggle = (priority: Priority) => {
+    if (selectedPriorities.includes(priority)) {
+      if (selectedPriorities.length > 1) {
+        setSelectedPriorities(selectedPriorities.filter((p) => p !== priority))
+      }
+    } else {
+      setSelectedPriorities([...selectedPriorities, priority])
+    }
   }
 
   // Sort by priority for display
@@ -167,24 +233,75 @@ export default function TodoList() {
         onSelectGroup={setActiveGroupId}
         onCreateGroup={handleCreateGroup}
         onRenameGroup={handleRenameGroup}
+        onChangeGroupColor={handleChangeGroupColor}
         onDeleteGroup={handleDeleteGroup}
       />
 
-      {/* Filter */}
-      <div className="mb-6 flex items-center gap-4">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showCompleted}
-            onChange={(e) => setShowCompleted(e.target.checked)}
-            className="w-4 h-4 accent-blue-500"
-          />
-          <span className="text-gray-600">Show completed todos</span>
-        </label>
-        <span className="text-gray-400">|</span>
-        <span className="text-gray-500 text-sm">
-          {todos.length} todo{todos.length !== 1 ? 's' : ''}
-        </span>
+      {/* Filters */}
+      <div className="mb-6 p-4 bg-white rounded-lg border">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Show completed */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showCompleted}
+              onChange={(e) => setShowCompleted(e.target.checked)}
+              className="w-4 h-4 accent-blue-500"
+            />
+            <span className="text-gray-600 text-sm">Show completed</span>
+          </label>
+
+          <span className="text-gray-300">|</span>
+
+          {/* Priority filters */}
+          <div className="flex items-center gap-2">
+            <span className="text-gray-600 text-sm">Priority:</span>
+            {(['high', 'medium', 'low'] as Priority[]).map((priority) => (
+              <label key={priority} className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedPriorities.includes(priority)}
+                  onChange={() => handlePriorityToggle(priority)}
+                  className={`w-4 h-4 ${
+                    priority === 'high' ? 'accent-red-500' :
+                    priority === 'medium' ? 'accent-yellow-500' : 'accent-green-500'
+                  }`}
+                />
+                <span className={`text-sm capitalize ${
+                  priority === 'high' ? 'text-red-600' :
+                  priority === 'medium' ? 'text-yellow-600' : 'text-green-600'
+                }`}>
+                  {priority}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <span className="text-gray-300">|</span>
+
+          {/* Assignee filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-gray-600 text-sm">Assignee:</span>
+            <select
+              value={selectedAssignee}
+              onChange={(e) => setSelectedAssignee(e.target.value)}
+              className="p-1 border rounded text-sm text-black"
+            >
+              <option value="">All</option>
+              {allAssignees.map((assignee) => (
+                <option key={assignee} value={assignee}>
+                  {assignee}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <span className="text-gray-300">|</span>
+
+          <span className="text-gray-500 text-sm">
+            {todos.length} todo{todos.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       {/* Add Todo Form */}
@@ -202,6 +319,13 @@ export default function TodoList() {
         </span>
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 rounded-full bg-green-400"></span> Low
+        </span>
+        <span className="text-gray-300">|</span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded-full bg-orange-400"></span> Due soon
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded-full bg-red-600"></span> Overdue
         </span>
       </div>
 
@@ -228,6 +352,8 @@ export default function TodoList() {
                 onUpdate={handleUpdateTodo}
                 onDelete={handleDeleteTodo}
                 onAddComment={handleAddComment}
+                onEditComment={handleEditComment}
+                onDeleteComment={handleDeleteComment}
               />
             ))}
           </SortableContext>

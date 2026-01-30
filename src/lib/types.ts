@@ -3,6 +3,7 @@ export type Priority = 'high' | 'medium' | 'low'
 export interface Group {
   id: string
   name: string
+  color: string
   createdAt: string
 }
 
@@ -11,6 +12,7 @@ export interface Comment {
   content: string
   author: string | null
   createdAt: string
+  updatedAt: string
   todoId: string
 }
 
@@ -22,6 +24,7 @@ export interface Todo {
   completed: boolean
   position: number
   responsible: string | null
+  deadline: string | null
   createdAt: string
   solvedAt: string | null
   groupId: string | null
@@ -39,3 +42,16 @@ export const priorityBadgeColors: Record<Priority, string> = {
   medium: 'bg-yellow-500 text-black',
   low: 'bg-green-500 text-white',
 }
+
+export const GROUP_COLORS = [
+  '#3b82f6', // blue
+  '#ef4444', // red
+  '#22c55e', // green
+  '#f59e0b', // amber
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+  '#f97316', // orange
+  '#6366f1', // indigo
+  '#84cc16', // lime
+]

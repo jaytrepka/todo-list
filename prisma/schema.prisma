@@ -13,6 +13,7 @@ datasource db {
 model Group {
   id        String   @id @default(cuid())
   name      String
+  color     String   @default("#3b82f6")
   createdAt DateTime @default(now())
   todos     Todo[]
 }
@@ -25,6 +26,7 @@ model Todo {
   completed   Boolean   @default(false)
   position    Int       @default(0)
   responsible String?
+  deadline    DateTime?
   createdAt   DateTime  @default(now())
   solvedAt    DateTime?
   groupId     String?
@@ -37,6 +39,7 @@ model Comment {
   content   String
   author    String?
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
   todoId    String
   todo      Todo     @relation(fields: [todoId], references: [id], onDelete: Cascade)
 }

@@ -7,11 +7,15 @@ export async function PATCH(
 ) {
   const { id } = await params
   const body = await request.json()
-  const { name } = body
+  const { name, color } = body
+
+  const updateData: Record<string, unknown> = {}
+  if (name !== undefined) updateData.name = name
+  if (color !== undefined) updateData.color = color
 
   const group = await prisma.group.update({
     where: { id },
-    data: { name },
+    data: updateData,
   })
 
   return NextResponse.json(group)

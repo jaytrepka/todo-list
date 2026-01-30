@@ -3,16 +3,36 @@
 import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Todo, Priority, priorityColors, priorityBadgeColors } from '@/lib/types'
+import { Todo, Priority, priorityColors, priorityBadgeColors, Comment } from '@/lib/types'
 
 interface TodoCardProps {
   todo: Todo
   onUpdate: (id: string, data: Partial<Todo>) => void
   onDelete: (id: string) => void
   onAddComment: (todoId: string, content: string, author: string) => void
+  onEditComment: (commentId: string, content: string) => void
+  onDeleteComment: (commentId: string, todoId: string) => void
 }
 
-export default function TodoCard({ todo, onUpdate, onDelete, onAddComment }: TodoCardProps) {
+function getDeadlineStatus(deadline: string | null): { isUrgent: boolean; isOverdue: boolean; daysLeft: number | null } {
+  if (!deadline) return { isUrgent: false, isOverdue: false, daysLeft: null }
+  
+  const deadlineDate = new Date(deadline)
+  deadlineDate.setHours(23, 59, 59, 999)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  const diffTime = deadlineDate.getTime() - today.getTime()
+  const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  
+  return {
+    isUrgent: daysLeft <= 2 && daysLeft >= 0,
+    isOverdue: daysLeft < 0,
+    daysLeft,
+  }
+}
+
+export default function TodoCard({ todo, onUpdate, onDelete, onAddComment, onEditComment, onDeleteComment }: TodoCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({
@@ -20,9 +40,12 @@ export default function TodoCard({ todo, onUpdate, onDelete, onAddComment }: Tod
     description: todo.description || '',
     priority: todo.priority,
     responsible: todo.responsible || '',
+    deadline: todo.deadline ? todo.deadline.split('T')[0] : '',
   })
   const [newComment, setNewComment] = useState('')
   const [commentAuthor, setCommentAuthor] = useState('')
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editingCommentContent, setEditingCommentContent] = useState('')
 
   const {
     attributes,
@@ -39,8 +62,13 @@ export default function TodoCard({ todo, onUpdate, onDelete, onAddComment }: Tod
     opacity: isDragging ? 0.5 : 1,
   }
 
+  const deadlineStatus = getDeadlineStatus(todo.deadline)
+
   const handleSave = () => {
-    onUpdate(todo.id, editData)
+    onUpdate(todo.id, {
+      ...editData,
+      deadline: editData.deadline || null,
+    } as Partial<Todo>)
     setIsEditing(false)
   }
 
@@ -56,17 +84,39 @@ export default function TodoCard({ todo, onUpdate, onDelete, onAddComment }: Tod
     }
   }
 
+  const handleStartEditComment = (comment: Comment) => {
+    setEditingCommentId(comment.id)
+    setEditingCommentContent(comment.content)
+  }
+
+  const handleSaveComment = () => {
+    if (editingCommentId && editingCommentContent.trim()) {
+      onEditComment(editingCommentId, editingCommentContent)
+      setEditingCommentId(null)
+      setEditingCommentContent('')
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()
+  }
+
+  const formatDeadline = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString()
+  }
+
+  const getCardClasses = () => {
+    if (todo.completed) return `${priorityColors[todo.priority as Priority]} opacity-60`
+    if (deadlineStatus.isOverdue) return 'bg-red-200 border-red-600 hover:bg-red-100 ring-2 ring-red-500'
+    if (deadlineStatus.isUrgent) return 'bg-orange-200 border-orange-500 hover:bg-orange-100 ring-2 ring-orange-400'
+    return priorityColors[todo.priority as Priority]
   }
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`border-2 rounded-lg p-4 mb-3 ${priorityColors[todo.priority as Priority]} ${
-        todo.completed ? 'opacity-60' : ''
-      }`}
+      className={`border-2 rounded-lg p-4 mb-3 ${getCardClasses()}`}
     >
       <div className="flex items-start gap-3">
         {/* Drag Handle */}
@@ -106,7 +156,7 @@ export default function TodoCard({ todo, onUpdate, onDelete, onAddComment }: Tod
                 placeholder="Description (optional)"
                 rows={2}
               />
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <select
                   value={editData.priority}
                   onChange={(e) => setEditData({ ...editData, priority: e.target.value as Priority })}
@@ -120,8 +170,14 @@ export default function TodoCard({ todo, onUpdate, onDelete, onAddComment }: Tod
                   type="text"
                   value={editData.responsible}
                   onChange={(e) => setEditData({ ...editData, responsible: e.target.value })}
-                  className="flex-1 p-2 border rounded text-black"
+                  className="flex-1 min-w-32 p-2 border rounded text-black"
                   placeholder="Responsible person"
+                />
+                <input
+                  type="date"
+                  value={editData.deadline}
+                  onChange={(e) => setEditData({ ...editData, deadline: e.target.value })}
+                  className="p-2 border rounded text-black"
                 />
               </div>
               <div className="flex gap-2">
@@ -151,6 +207,19 @@ export default function TodoCard({ todo, onUpdate, onDelete, onAddComment }: Tod
                 {todo.responsible && (
                   <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full">
                     👤 {todo.responsible}
+                  </span>
+                )}
+                {todo.deadline && (
+                  <span className={`px-2 py-0.5 text-xs rounded-full ${
+                    deadlineStatus.isOverdue 
+                      ? 'bg-red-600 text-white' 
+                      : deadlineStatus.isUrgent 
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    📅 {formatDeadline(todo.deadline)}
+                    {deadlineStatus.isOverdue && ' (Overdue!)'}
+                    {deadlineStatus.isUrgent && !deadlineStatus.isOverdue && ` (${deadlineStatus.daysLeft}d left)`}
                   </span>
                 )}
               </div>
@@ -202,11 +271,54 @@ export default function TodoCard({ todo, onUpdate, onDelete, onAddComment }: Tod
           ) : (
             <div className="space-y-2 mb-3">
               {todo.comments.map((comment) => (
-                <div key={comment.id} className="bg-white/50 p-2 rounded text-sm">
-                  <p className="text-gray-800">{comment.content}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {comment.author || 'Anonymous'} • {formatDate(comment.createdAt)}
-                  </p>
+                <div key={comment.id} className="bg-white/50 p-2 rounded text-sm group">
+                  {editingCommentId === comment.id ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editingCommentContent}
+                        onChange={(e) => setEditingCommentContent(e.target.value)}
+                        className="flex-1 p-1 border rounded text-black text-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveComment()
+                          if (e.key === 'Escape') setEditingCommentId(null)
+                        }}
+                        autoFocus
+                      />
+                      <button onClick={handleSaveComment} className="text-green-600 hover:text-green-800">✓</button>
+                      <button onClick={() => setEditingCommentId(null)} className="text-gray-500 hover:text-gray-700">✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-start">
+                        <p className="text-gray-800">{comment.content}</p>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleStartEditComment(comment)}
+                            className="text-blue-500 hover:text-blue-700 text-xs"
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('Delete this comment?')) {
+                                onDeleteComment(comment.id, todo.id)
+                              }
+                            }}
+                            className="text-red-500 hover:text-red-700 text-xs"
+                            title="Delete"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {comment.author || 'Anonymous'} • {formatDate(comment.createdAt)}
+                        {comment.updatedAt !== comment.createdAt && ' (edited)'}
+                      </p>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

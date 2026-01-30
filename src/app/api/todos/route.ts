@@ -5,6 +5,8 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const showCompleted = searchParams.get('showCompleted') === 'true'
   const groupId = searchParams.get('groupId')
+  const priorities = searchParams.get('priorities')?.split(',').filter(Boolean)
+  const assignee = searchParams.get('assignee')
 
   const where: Record<string, unknown> = {}
   if (!showCompleted) where.completed = false
@@ -14,6 +16,16 @@ export async function GET(request: NextRequest) {
     where.groupId = null
   } else if (groupId) {
     where.groupId = groupId
+  }
+
+  // Priority filter
+  if (priorities && priorities.length > 0) {
+    where.priority = { in: priorities }
+  }
+
+  // Assignee filter
+  if (assignee) {
+    where.responsible = assignee
   }
 
   const todos = await prisma.todo.findMany({
@@ -30,7 +42,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { title, description, priority, responsible, groupId } = body
+  const { title, description, priority, responsible, groupId, deadline } = body
 
   const maxPosition = await prisma.todo.aggregate({
     _max: { position: true },
@@ -42,6 +54,7 @@ export async function POST(request: NextRequest) {
       description: description || null,
       priority: priority || 'low',
       responsible: responsible || null,
+      deadline: deadline ? new Date(deadline) : null,
       groupId: groupId === 'common' ? null : (groupId || null),
       position: (maxPosition._max.position ?? -1) + 1,
     },
