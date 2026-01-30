@@ -1,0 +1,33 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Todo {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  priority    String    @default("low") // high, medium, low
+  completed   Boolean   @default(false)
+  position    Int       @default(0)
+  responsible String?
+  createdAt   DateTime  @default(now())
+  solvedAt    DateTime?
+  comments    Comment[]
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  author    String?
+  createdAt DateTime @default(now())
+  todoId    String
+  todo      Todo     @relation(fields: [todoId], references: [id], onDelete: Cascade)
+}
