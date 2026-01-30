@@ -10,6 +10,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Group {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  todos     Todo[]
+}
+
 model Todo {
   id          String    @id @default(cuid())
   title       String
@@ -20,6 +27,8 @@ model Todo {
   responsible String?
   createdAt   DateTime  @default(now())
   solvedAt    DateTime?
+  groupId     String?
+  group       Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
   comments    Comment[]
 }
 

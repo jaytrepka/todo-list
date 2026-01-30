@@ -1,5 +1,11 @@
 export type Priority = 'high' | 'medium' | 'low'
 
+export interface Group {
+  id: string
+  name: string
+  createdAt: string
+}
+
 export interface Comment {
   id: string
   content: string
@@ -18,6 +24,7 @@ export interface Todo {
   responsible: string | null
   createdAt: string
   solvedAt: string | null
+  groupId: string | null
   comments: Comment[]
 }
 

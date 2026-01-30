@@ -18,10 +18,13 @@ import {
 } from '@dnd-kit/sortable'
 import TodoCard from './TodoCard'
 import AddTodoForm from './AddTodoForm'
-import { Todo, Priority } from '@/lib/types'
+import GroupTabs from './GroupTabs'
+import { Todo, Group, Priority } from '@/lib/types'
 
 export default function TodoList() {
   const [todos, setTodos] = useState<Todo[]>([])
+  const [groups, setGroups] = useState<Group[]>([])
+  const [activeGroupId, setActiveGroupId] = useState('common')
   const [showCompleted, setShowCompleted] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -32,12 +35,22 @@ export default function TodoList() {
     })
   )
 
+  const fetchGroups = useCallback(async () => {
+    const res = await fetch('/api/groups')
+    const data = await res.json()
+    setGroups(data)
+  }, [])
+
   const fetchTodos = useCallback(async () => {
-    const res = await fetch(`/api/todos?showCompleted=${showCompleted}`)
+    const res = await fetch(`/api/todos?showCompleted=${showCompleted}&groupId=${activeGroupId}`)
     const data = await res.json()
     setTodos(data)
     setLoading(false)
-  }, [showCompleted])
+  }, [showCompleted, activeGroupId])
+
+  useEffect(() => {
+    fetchGroups()
+  }, [fetchGroups])
 
   useEffect(() => {
     fetchTodos()
@@ -64,7 +77,7 @@ export default function TodoList() {
     const res = await fetch('/api/todos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, groupId: activeGroupId }),
     })
     const newTodo = await res.json()
     setTodos([...todos, newTodo])
@@ -104,6 +117,33 @@ export default function TodoList() {
     )
   }
 
+  const handleCreateGroup = async (name: string) => {
+    const res = await fetch('/api/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    const newGroup = await res.json()
+    setGroups([...groups, newGroup])
+    setActiveGroupId(newGroup.id)
+  }
+
+  const handleRenameGroup = async (id: string, name: string) => {
+    const res = await fetch(`/api/groups/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    const updatedGroup = await res.json()
+    setGroups(groups.map((g) => (g.id === id ? updatedGroup : g)))
+  }
+
+  const handleDeleteGroup = async (id: string) => {
+    await fetch(`/api/groups/${id}`, { method: 'DELETE' })
+    setGroups(groups.filter((g) => g.id !== id))
+    setActiveGroupId('common')
+  }
+
   // Sort by priority for display
   const sortedTodos = [...todos].sort((a, b) => {
     const priorityOrder = { high: 0, medium: 1, low: 2 }
@@ -120,6 +160,16 @@ export default function TodoList() {
 
   return (
     <div>
+      {/* Group Tabs */}
+      <GroupTabs
+        groups={groups}
+        activeGroupId={activeGroupId}
+        onSelectGroup={setActiveGroupId}
+        onCreateGroup={handleCreateGroup}
+        onRenameGroup={handleRenameGroup}
+        onDeleteGroup={handleDeleteGroup}
+      />
+
       {/* Filter */}
       <div className="mb-6 flex items-center gap-4">
         <label className="flex items-center gap-2 cursor-pointer">
@@ -158,7 +208,7 @@ export default function TodoList() {
       {/* Todo List */}
       {todos.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
-          <p className="text-xl mb-2">No todos yet!</p>
+          <p className="text-xl mb-2">No todos in this group yet!</p>
           <p>Add your first todo above.</p>
         </div>
       ) : (
